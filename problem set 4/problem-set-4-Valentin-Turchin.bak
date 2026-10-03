@@ -1,0 +1,235 @@
+#lang racket
+;;; Topic 4. Problem set --- Racket. Answer file.
+;;;
+;;; Name:   Valentin Turchin
+;;; Group:  B24-SD-0x
+;;; Email:  v.turchin@innopolis.university
+;;;
+;;; (The name above is Valentin Turchin, who designed Refal and invented
+;;; supercompilation. Please replace it with your own.)
+;;;
+;;; How to use this file.
+;;;
+;;;   1. Enter your name, group and university email above.
+;;;   2. Answer every problem of the sheet in this file. Code is written as
+;;;      code. A trace or an explanation is written in a comment, under the
+;;;      marker for its part. A trace is written one step per line, as in
+;;;      the lecture:
+;;;
+;;;        ;; (foldl cons empty '(1 2))
+;;;        ;; = (foldl cons '(1) '(2))
+;;;        ;; = (foldl cons '(2 1) '())
+;;;        ;; = '(2 1)
+;;;
+;;;   3. Every problem carries an AI use declaration. For a No AI problem,
+;;;      leave the declaration in place. Problem 4.5 gives two choices: keep
+;;;      the line that is true and delete the other. A missing declaration is
+;;;      treated as a missing answer.
+;;;   4. Rename the file after yourself, as problem-set-4-<Surname>.rkt, and
+;;;      make sure that it runs. Open it in DrRacket and press Run, or run
+;;;
+;;;        racket problem-set-4-<Surname>.rkt
+;;;
+;;;      in a terminal. The examples from the sheet appear in this file as
+;;;      plain expressions, each followed by its expected value in a comment.
+;;;      Running the file prints your values in the same order; compare them
+;;;      with the comments. A file that does not run can only be marked from
+;;;      what can be read, and that is less. The stubs below are chosen so that
+;;;      the file runs before you have written anything; replace them.
+;;;   5. Submit this file. If you used an assistant for problem 4.5(a), submit
+;;;      transcript.md as well. It must contain the whole exchange, verbatim
+;;;      and unedited.
+
+(require racket/generator)
+
+;;; ===========================================================================
+;;; Problem 4.1 (Loops without recursion)                                No AI
+;;; ===========================================================================
+
+;; AI use declaration.
+;; I have not used AI tools when solving this problem.
+
+;; (a)
+(define (warm-days limit temps)
+  'todo)
+
+(warm-days 20 '(18 23 21 17 25)) ; '((2 23) (3 21) (5 25))
+(warm-days 30 '(18 23))          ; '()
+
+;; (b)
+(define (pairs-with-sum n xs)
+  'todo)
+
+(pairs-with-sum 10 '(3 7 5 2 8))    ; '((3 7) (2 8))
+(pairs-with-sum 9 '(4 5 1 8 6 3))   ; '((4 5) (1 8) (3 6))
+(pairs-with-sum 6 '(1 2 3))         ; '()
+
+;; (c)
+(define (longest-track tracks)
+  'todo)
+
+(longest-track '(("a" 200) ("b" 320) ("c" 250))) ; '("b" 320)
+(longest-track '(("x" 100) ("y" 100)))           ; '("x" 100)
+
+;;; ===========================================================================
+;;; Problem 4.2 (On demand)                                              No AI
+;;; ===========================================================================
+
+;; AI use declaration.
+;; I have not used AI tools when solving this problem.
+
+;; Assume that h is positive, k is greater than one, and the target below is
+;; finite.
+
+;; (a) The stub is the empty stream, so that the examples run.
+(define (heights h k)
+  empty-stream)
+
+(for/list ([h (heights 50 6/5)] [i 4]) h) ; '(50 60 72 432/5)
+;; (stream-first (stream-rest (heights 1 2)))  ; 2
+;; Uncomment the line above once heights is written: on the stub it is an error.
+
+;; (b) The stub is a generator that yields nothing, so that the calls run.
+(define (make-next-height h k)
+  (generator () 'todo))
+
+(define next-height (make-next-height 50 6/5))
+(next-height) ; 50
+(next-height) ; 60
+(next-height) ; 72
+
+;; (c)
+(define (years-until target s)
+  'todo)
+
+(years-until 100 (heights 50 6/5)) ; 4
+(years-until 40 (heights 50 6/5))  ; 0
+(years-until 1000 (heights 1 2))   ; 10
+
+;; Why the stream remains reusable after years-until reads it, while a
+;; generator does not:
+;;
+
+;;; ===========================================================================
+;;; Problem 4.3 (A datatype of your own)                                 No AI
+;;; ===========================================================================
+
+;; AI use declaration.
+;; I have not used AI tools when solving this problem.
+
+;; Given.
+(struct flight (from to minutes))
+
+(define flights
+  (list (flight "KZN" "SVO" 95)
+        (flight "SVO" "LED" 80)
+        (flight "LED" "KZN" 130)
+        (flight "SVO" "KZN" 95)))
+
+;; Given. The three airports of a connection: where the first flight departs,
+;; where the two meet, and where the second arrives.
+(define (route c)
+  (list (flight-from (first c)) (flight-to (first c)) (flight-to (second c))))
+
+;; (a)
+(define (airborne fs)
+  'todo)
+
+(airborne flights) ; 400
+(airborne '())     ; 0
+
+;; (b) The stub returns the flight unchanged, so that the example runs.
+(define (delayed f delay)
+  f)
+
+(flight-minutes (delayed (first flights) 20)) ; 115
+(flight-minutes (first flights))              ; 95
+
+;; (c) The order of the five compatible pairs is not assessed. The stub is
+;; the empty list, so that the examples run.
+(define (connections fs)
+  '())
+
+(length (connections flights))     ; 5
+(map route (connections flights))
+; '(("KZN" "SVO" "LED") ("KZN" "SVO" "KZN") ("SVO" "LED" "KZN")
+;   ("LED" "KZN" "SVO") ("SVO" "KZN" "SVO"))
+
+;;; ===========================================================================
+;;; Problem 4.4 (Two ways to say it)                                     No AI
+;;; ===========================================================================
+
+;; AI use declaration.
+;; I have not used AI tools when solving this problem.
+
+;; Given.
+(define fares '(120 350 90 400))
+
+(define (discounted fares)
+  (for/list ([f fares] #:when (>= f 100))
+    (* f 9/10)))
+
+(define (dearest fares)
+  (foldl (lambda (f m) (max f m)) 0 fares))
+
+(discounted fares) ; '(108 315 360)
+(dearest fares)    ; 400
+
+;; (a)
+(define (discounted2 fares)
+  'todo)
+
+(define (dearest2 fares)
+  'todo)
+
+(discounted2 fares) ; '(108 315 360)
+(dearest2 fares)    ; 400
+
+;; (b)
+;; discounted or discounted2, and why:
+;; dearest or dearest2, and why:
+
+;; (c)
+;; How many lists discounted builds:
+;; Could the computation in discounted be transferred to a stream, and why?
+;; Could the computation in dearest be transferred to a stream, and why?
+;; (The definitions above are eager and require finite input.)
+
+;;; ===========================================================================
+;;; Problem 4.5 (A fold with two accumulators, audited)   (a) AI allowed, then No AI
+;;; ===========================================================================
+
+;; AI use declaration. Keep one line and delete the other. Here the second
+;; line is usually the true one.
+;; I have not used AI tools when solving this problem.
+;; I have used AI (<model>) in part (a) of this problem, in accordance with
+;; the course rules and the problem statement.
+
+(define (extremes xs)
+  (for/fold ([lo (first xs)]
+             [hi (first xs)])
+            ([x (rest xs)])
+    (values (min lo x) (max hi x))))
+
+(extremes '(4 9 2)) ; 2
+                    ; 9
+
+;; (a) The assistant's version, or your own version if you used no assistant,
+;;     renamed so that both can live in this file. If you used an assistant,
+;;     the exchange itself goes into transcript.md. The stub returns two
+;;     values, so that the example runs. If the recorded version stops with an
+;;     error, keep its definition verbatim and comment out only the example
+;;     call after recording the error in (b), so that the rest of the file runs.
+(define (extremes/ai xs)
+  (values 'todo 'todo))
+
+(extremes/ai '(4 9 2)) ; compare with the two lines above
+
+;; (b)
+;; (extremes/ai '(4 9 2))
+;; = ...
+;;
+;; How the two accumulators travel through the fold:
+
+;; (c)
+;;

@@ -1,0 +1,723 @@
+#lang racket
+;;; Mini project 1 --- Racket. A query library. Answer file.
+;;;
+;;; Name:   Mariia Chegodaeva
+;;; Group:  B24-SD-02
+;;; Email:  ma.chegodaeva@innopolis.university
+;;;
+;;; (The name above is Valentin Turchin, who designed Refal and invented
+;;; supercompilation. Please replace it with your own.)
+;;;
+;;; How to use this file.
+;;;
+;;;   1. Enter your name, group and university email above.
+;;;   2. Answer every problem of the sheet in this file. Code is written as
+;;;      code. An explanation is written in a comment, under the marker for
+;;;      its problem.
+;;;   3. Every problem carries an AI use declaration. It consists of two
+;;;      lines. Keep the line that is true and delete the other. A missing
+;;;      declaration is treated as a missing answer. A problem marked No AI
+;;;      on the sheet has only the first line.
+;;;   4. Rename the file after yourself, as mini-project-1-<Surname>.rkt, and
+;;;      make sure that it runs. Open it in DrRacket and press Run, or run
+;;;
+;;;        racket mini-project-1-<Surname>.rkt
+;;;
+;;;      in a terminal. The examples from the sheet appear in this file as
+;;;      plain expressions, each with its expected value in a comment. Please
+;;;      run the file and compare its output with the expected values in the
+;;;      comments. If the file does not run, the TA can assess the explanations
+;;;      and readable definitions, but cannot verify the example results.
+;;;      The stubs below allow the file to run before you have written any
+;;;      answers; replace them.
+;;;   5. Submit this file and transcript.md beside it: the whole exchange
+;;;      with your assistant, verbatim and unedited, for every problem where
+;;;      you used one.
+
+(require racket/stream)
+
+;;; ===========================================================================
+;;; Given: the data
+;;; ===========================================================================
+
+;; An online cinema. A film has a title, a year, a length in minutes and a
+;; rating; a showing has the film's title, a channel and a start time,
+;; written as hhmm, so that 1830 is half past six in the evening.
+(struct film (title year minutes rating))
+(struct showing (title channel start))
+
+(define films
+  (list (film "Solaris"          1972 167 8.1)
+        (film "Stalker"          1979 162 8.2)
+        (film "Kin-dza-dza!"     1986 135 8.3)
+        (film "Ivan Vasilievich" 1973  93 8.2)
+        (film "The Diamond Arm"  1969 100 8.5)
+        (film "Office Romance"   1977 159 8.0)
+        (film "Courier"          1986  88 7.6)))
+
+(define showings
+  (list (showing "Stalker"         1 1400)
+        (showing "Solaris"         2 1730)
+        (showing "Kin-dza-dza!"    1 1900)
+        (showing "The Diamond Arm" 3 1215)
+        (showing "Courier"         2 2030)
+        (showing "Stalker"         1 2100)
+        (showing "Office Romance"  3 1830)
+        (showing "The Diamond Arm" 1 1600)))
+
+;; Four tests and one helper, used in the examples.
+(define (high? f) (> (film-rating f) 8.1))
+(define (recent? f) (> (film-year f) 1975))
+(define (evening? s) (>= (showing-start s) 1800))
+(define (same-title? f s) (equal? (film-title f) (showing-title s)))
+(define (title+channel p)
+  (list (film-title (car p)) (showing-channel (cdr p))))
+
+;;; ===========================================================================
+;;; Given: a query is data
+;;; ===========================================================================
+
+;; A query is a value built from these six structs. A table may contain rows
+;; of any kind accepted by the query's functions. Its rows are a finite list
+;; for run, cost and explain, or a stream in section 2. A non-table query has
+;; one source, except join, which has two.
+;; Tests, projections and keys are pure and defined on all relevant rows.
+;; Tests return booleans; keys return real numbers other than NaN; counts are
+;; non-negative integers. An order-by needs a finite source, and the right
+;; source of a stream join must be finite.
+(struct table (rows))                 ; the rows themselves
+(struct where (test source))          ; the rows of source that pass test
+(struct select (function source))     ; function of each row of source
+(struct order-by (key source))        ; the rows of source, by key, ascending
+(struct limit (count source))         ; the first count rows of source, or fewer
+(struct join (test left right))       ; every pair (cons l r) with (test l r) true
+
+;; Given, from the library. (sort xs < #:key f) sorts xs by the number f
+;; gives for each element; (sort xs > #:key f) sorts the other way.
+;; (stream-take s n) requires at least n elements. For limit, write a helper
+;; that stops on zero or an empty stream, using stream-cons to delay the rest.
+;; (stream-lazy e) delays an expression e that produces a stream. Use it to
+;; delay the recursive argument of stream-append, which is a function.
+;; (stream-append s t) is s followed by t. stream-map, stream-filter and
+;; stream->list are as in the lecture.
+
+;;; ===========================================================================
+;;; Section 1 (A query is data)
+;;; ===========================================================================
+
+;; I have not used AI tools in this problem.
+
+;; 1.1 table, where, select. The stub returns no rows, so that the file runs.
+
+;; Returns at most the first n elements
+(define (take-at-most n xs)
+  (cond [(or (= n 0) (empty? xs)) '()]
+        [else
+         (cons (first xs)
+               (take-at-most (- n 1) (rest xs)))]))
+
+;; Produces all accepted pairs while preserving row order
+(define (join-rows left-rows right-rows test)
+  (cond [(empty? left-rows) '()]
+        [else
+         (append
+          (map (lambda (r)
+                 (cons (first left-rows) r))
+               (filter
+                (lambda (r)
+                  (test (first left-rows) r))
+                right-rows))
+          (join-rows (rest left-rows)
+                     right-rows
+                     test))]))
+
+(define (run q)
+  (cond
+    [(table? q)
+     (table-rows q)]
+
+    [(where? q)
+             (filter (where-test q)
+                     (run (where-source q)))]
+    
+    [(select? q)
+     (map(select-function q)
+         (run (select-source q)))]
+
+    [(order-by? q)
+     (sort (run (order-by-source q))
+           <
+           #:key (order-by-key q))]
+
+    [(limit? q)
+     (take-at-most
+      (limit-count q)
+      (run (limit-source q)))]
+
+    [(join? q)
+     (join-rows
+      (run (join-left q))
+      (run (join-right q))
+      (join-test q))]
+))
+
+(length (run (table films)))                          ; 7
+(run (select film-title (where high? (table films))))
+; '("Stalker" "Kin-dza-dza!" "Ivan Vasilievich" "The Diamond Arm")
+(length (run (where recent? (table films))))          ; 4
+
+;; I have not used AI tools in this problem.
+
+;; 1.2 order-by and limit. Extend run above; nothing to define here.
+(run (limit 2 (select film-title (where high? (table films)))))
+; '("Stalker" "Kin-dza-dza!")
+(run (limit 3 (select film-title (order-by film-minutes (table films)))))
+; '("Courier" "Ivan Vasilievich" "The Diamond Arm")
+(length (run (limit 10 (table films))))                ; 7
+
+;; I have not used AI tools in this problem.
+
+;; 1.3 join. Extend run above; nothing to define here.
+(length (run (join same-title? (table films) (table showings)))) ; 8
+(run (select title+channel
+             (join same-title?
+                   (where high? (table films))
+                   (where evening? (table showings)))))
+; '(("Stalker" 1) ("Kin-dza-dza!" 1))
+
+;;; ===========================================================================
+;;; Section 2 (On demand)
+;;; ===========================================================================
+
+;; AI use declaration for 2.1. Keep one line and delete the other.
+;; I have used AI (chatGPT free) in this problem, in accordance with the course rules and the sheet.
+
+;; Given: the naturals from n, a source with no end.
+(define (from n) (stream-cons n (from (+ n 1))))
+
+;; 2.1 The stub is the empty stream, so that the file runs.
+(define (run/stream q)
+  (match q
+    [(table rows)
+     rows]
+
+    [(where test source)
+     (stream-filter test (run/stream source))]
+
+    [(select function source)
+     (stream-map function (run/stream source))]
+
+    [(limit count source)
+     (define (take-stream n s)
+       (if (or (zero? n) (stream-empty? s))
+           empty-stream
+           (stream-cons
+            (stream-first s)
+            (take-stream (- n 1) (stream-rest s)))))
+     (take-stream count (run/stream source))]
+
+    [(join test left right)
+     (define right-stream (run/stream right))
+
+     (define (join-with-right l rs)
+       (if (stream-empty? rs)
+           empty-stream
+           (let ([r (stream-first rs)])
+             (if (test l r)
+                 (stream-cons
+                  (cons l r)
+                  (join-with-right l (stream-rest rs)))
+                 (join-with-right l (stream-rest rs))))))
+
+     (define (join-left ls)
+       (if (stream-empty? ls)
+           empty-stream
+           (stream-append
+            (join-with-right (stream-first ls) right-stream)
+            (stream-lazy
+             (join-left (stream-rest ls))))))
+
+     (join-left (run/stream left))]
+
+    [(order-by key source)
+     (sort (stream->list (run/stream source))
+           <
+           #:key key)]))
+
+(stream->list (run/stream (limit 2 (select film-title (where high? (table films))))))
+; '("Stalker" "Kin-dza-dza!")
+(stream->list (run/stream (select title+channel
+                                  (join same-title?
+                                        (where high? (table films))
+                                        (where evening? (table showings))))))
+; '(("Stalker" 1) ("Kin-dza-dza!" 1))
+(stream->list (run/stream (limit 3 (where even? (table (from 1))))))
+; '(2 4 6)
+(stream->list (run/stream (limit 10 (table '(1 2))))) ; '(1 2)
+(stream->list (run/stream (limit 1 (table '()))))     ; '()
+(stream->list
+ (run/stream (limit 2 (join < (table (from 1)) (table '(3))))))
+; '((1 . 3) (2 . 3))
+
+;; I have not used AI tools in this problem.
+
+;; 2.2 (No AI) Why order-by cannot produce its rows on demand:
+;; order-by must see all input rows before it can know which row comes first.
+;; Therefore it has to consume the whole input stream before producing the sorted result
+
+;; Given: the films as a stream that prints a line each time a row is read.
+;; report prints the line and returns the film, as loud did in the lecture.
+(define (report f)
+  (displayln (format "reading ~a" (film-title f)))
+  f)
+
+(define (loud rows)
+  (cond [(empty? rows) empty-stream]
+        [else (stream-cons (report (first rows)) (loud (rest rows)))]))
+
+;; I have not used AI tools in this problem.
+
+;; 2.3 (No AI) Run these two once run/stream is written, and count the lines.
+(stream->list
+ (run/stream (limit 2 (select film-title (where high? (table (loud films)))))))
+(run (limit 2
+            (select film-title
+                    (where high? (table (stream->list (loud films)))))))
+;; (a) Lines printed by the first: 3
+;;     Lines printed by the second: 10
+;; (b) Why the first number:
+;;         It reads rows only until two films pass `high?`, so it stops after "Kin-dza-dza!" 
+;;     Why the second number:
+;;         `stream->list` forces the whole loud stream before run is called, so all10 films are read 
+
+;;; ===========================================================================
+;;; Section 3 (The optimiser)
+;;; ===========================================================================
+
+;; Given: the number of stages in a query, the table counted as one.
+(define (size q)
+  (cond [(table? q) 1]
+        [(where? q) (+ 1 (size (where-source q)))]
+        [(select? q) (+ 1 (size (select-source q)))]
+        [(order-by? q) (+ 1 (size (order-by-source q)))]
+        [(limit? q) (+ 1 (size (limit-source q)))]
+        [(join? q) (+ 1 (size (join-left q)) (size (join-right q)))]))
+
+;; Given: two queries with stages to spare, and a select that changes nothing.
+(define (keep f) f)
+(define slow-recent
+  (where recent? (where high? (order-by film-minutes (table films)))))
+(define slow-two
+  (limit 2 (select film-title (select keep (where high? (table films))))))
+
+;; I have not used AI tools in this problem.
+
+;; 3.1 (No AI) The four rules, applied at the top of q only. The stub changes nothing.
+(define (rule q)
+  (cond
+    ;; (where p (where q x))
+    ;; -> (where (lambda (r) (and (q r) (p r))) x)
+    [(and (where? q)
+          (where? (where-source q)))
+     (let ([p (where-test q)]
+           [inner (where-source q)])
+       (let ([q-test (where-test inner)]
+             [x (where-source inner)])
+         (where (lambda (r)
+                  (and (q-test r) (p r)))
+                x)))]
+
+    ;; (select f (select g x))
+    ;; -> (select (lambda (r) (f (g r))) x)
+    [(and (select? q)
+          (select? (select-source q)))
+     (let ([f (select-function q)]
+           [inner (select-source q)])
+       (let ([g (select-function inner)]
+             [x (select-source inner)])
+         (select (lambda (r)
+                   (f (g r)))
+                 x)))]
+
+    ;; (where p (order-by k x))
+    ;; -> (order-by k (where p x))
+    [(and (where? q)
+          (order-by? (where-source q)))
+     (let ([p (where-test q)]
+           [inner (where-source q)])
+       (order-by (order-by-key inner)
+                 (where p
+                        (order-by-source inner))))]
+
+    ;; (limit n (select f x))
+    ;; -> (select f (limit n x))
+    [(and (limit? q)
+          (select? (limit-source q)))
+     (let ([n (limit-count q)]
+           [inner (limit-source q)])
+       (select (select-function inner)
+               (limit n
+                      (select-source inner))))]
+
+    [else q]))
+
+(size (rule (where recent? (where high? (table films)))))         ; 2
+(size (rule (select film-title (select keep (table films)))))     ; 2
+(size (rule (where high? (order-by film-minutes (table films)))))
+; 3; order-by is now outside the where
+(size (rule (limit 2 (select film-title (table films)))))
+; 3; select is now outside the limit
+(size (rule (limit 2 (where high? (table films)))))               ; 3, unchanged
+
+;; I have not used AI tools in this problem.
+
+;; 3.2 rewrite applies rule at every stage, inner stages first. The stub changes nothing.
+(define (rewrite q)
+  (rule
+  (cond [(table? q)
+         q]
+        [(where? q)
+         (where (where-test q)
+                (rewrite (where-source q)))]
+        [(select? q)
+         (select (select-function q)
+                 (rewrite (select-source q)))]
+        [(order-by? q)
+         (order-by (order-by-key q)
+                   (rewrite (order-by-source q)))]
+        [(limit? q)
+         (limit (limit-count q)
+                (rewrite (limit-source q)))]
+        [(join? q)
+         (join (join-test q)
+               (rewrite (join-left q))
+               (rewrite (join-right q)))])))
+
+(size (rewrite slow-recent))
+; 4; both wheres are now below the order-by
+(size (rewrite slow-two))     ; 4, the selects fused
+
+;; I have not used AI tools in this problem.
+
+;; 3.3 optimise applies rewrite as many times as q has stages.
+(define (optimise q)
+  (define (repeat q n)
+    (if (= n 0)
+        q(repeat (rewrite q) (- n 1))))
+  (repeat q (size q)))
+
+(size (optimise slow-recent))               ; 3
+(equal? (run (optimise slow-recent)) (run slow-recent)) ; #t
+(size (optimise slow-two))                  ; 4
+(run (optimise slow-two))                   ; '("Stalker" "Kin-dza-dza!")
+;; Why that many passes are enough:
+;; A rewrite can move a stage only through the finite stages already in q.
+;; Therefore after at most (size q) passes, every possible rewrite has had
+;; enough passes to reach its final position
+
+;; I have not used AI tools in this problem.
+
+;; 3.4 (No AI) cost: the rows produced by every stage but the tables.
+(define (cost q)
+  (cond [(table? q)
+         0]
+
+        [(where? q)
+         (+ (length (run q))
+            (cost (where-source q)))]
+        [(select? q)
+         (+ (length (run q))
+            (cost (select-source q)))]
+        [(order-by? q)
+         (+ (length (run q))
+            (cost (order-by-source q)))]
+        [(limit? q)
+         (+ (length (run q))
+            (cost (limit-source q)))]
+        [(join? q)
+         (+ (length (run q))
+            (cost (join-left q))
+            (cost (join-right q)))]))
+
+(cost slow-recent)             ; 13
+(cost (optimise slow-recent))  ; 4
+(cost slow-two)                ; 14
+(cost (optimise slow-two))     ; 8
+
+;; Given for 3.5: the name of a stage, and the queries it reads from.
+(define (stage-name q)
+  (cond [(table? q) "table"] [(where? q) "where"] [(select? q) "select"]
+        [(order-by? q) "order-by"] [(limit? q) "limit"] [(join? q) "join"]))
+
+(define (sources q)
+  (cond [(table? q) '()]
+        [(where? q) (list (where-source q))]
+        [(select? q) (list (select-source q))]
+        [(order-by? q) (list (order-by-source q))]
+        [(limit? q) (list (limit-source q))]
+        [(join? q) (list (join-left q) (join-right q))]))
+
+;; Given, from the library: (make-string n #\space) is n spaces, and
+;; (format "~a~a: ~a rows" a b c) is the string with a, b and c filled in.
+
+;; I have not used AI tools in this problem.
+
+;; 3.5 explain prints the plan: one line per stage, two spaces per level.
+(define (explain q)
+  (define (print-stage q level)
+    (displayln
+     (format "~a~a: ~a rows"
+             (make-string (* 2 level) #\space)
+             (stage-name q)
+             (length (run q))))
+
+    (for-each
+     (lambda (source)
+       (print-stage source (+ level 1)))
+     (sources q)))
+
+  (print-stage q 0))
+
+(explain slow-recent)
+; where: 2 rows
+;   where: 4 rows
+;     order-by: 7 rows
+;       table: 7 rows
+(explain (optimise slow-recent))
+; order-by: 2 rows
+;   where: 2 rows
+;     table: 7 rows
+
+;; I have not used AI tools in this problem.
+
+;; 3.6 (No AI) The rule that is the claim of problem set 3, and the claim:
+;; The second rule: two consecutive selects can be fused into one select
+;; whose function is the composition of the two functions
+;; ((select f (select g x)) is equivalent to (select (lambda (r) (f (g r))) x))
+
+;; I have not used AI tools in this problem.
+
+;; 3.7 (No AI) Why the third rule is safe:
+;; Filtering removes rows but does not change the relative order of those kept.
+;; Therefore filtering before sorting gives the same kept rows in the same
+;; sorted order as sorting first and then filteringQ
+
+;;; ===========================================================================
+;;; Section 4 (Three questions)
+;;; ===========================================================================
+
+;; I have not used AI tools in this problem.
+
+;; 4.1 (No AI) The channels showing a film rated above 8.1 in the evening.
+(define evening-channels
+  (select title+channel
+          (where
+           (lambda (p)
+             (and (> (film-rating (car p)) 8.1)
+                  (evening? (cdr p))))
+           (join same-title?
+                 (table films)
+                 (table showings)))))
+
+(run evening-channels)
+; '(("Stalker" 1) ("Kin-dza-dza!" 1))
+
+(define (evening-channels/for)
+  (for*/list ([f films]
+              [s showings]
+              #:when (same-title? f s)
+              #:when (> (film-rating f) 8.1)
+              #:when (evening? s))
+    (list (film-title f)
+          (showing-channel s))))
+
+(evening-channels/for)
+; '(("Stalker" 1) ("Kin-dza-dza!" 1))
+
+;; I have not used AI tools in this problem.
+
+;; 4.2 The three shortest matching showings on channel 1, shortest first.
+;; Count repeated showings separately; preserve join order on equal lengths.
+(define shortest-on-1
+  (select
+   (lambda (p) (film-title (car p)))
+   (limit
+    3
+    (order-by
+     (lambda (p) (film-minutes (car p)))
+     (where
+      (lambda (p)
+        (= (showing-channel (cdr p)) 1))
+      (join same-title?
+            (table films)
+            (table showings)))))))
+
+(run shortest-on-1)
+; '("The Diamond Arm" "Kin-dza-dza!" "Stalker")
+
+(define (shortest-on-1/for)
+  (define matches
+    (for*/list ([f films]
+                [s showings]
+                #:when (same-title? f s)
+                #:when (= (showing-channel s) 1))
+      (cons f s)))
+  (for/list ([p (take
+                 (sort matches
+                       <
+                       #:key
+                       (lambda (p)
+                         (film-minutes (car p))))
+                 3)])
+    (film-title (car p))))
+
+(shortest-on-1/for)
+; '("The Diamond Arm" "Kin-dza-dza!" "Stalker")
+
+;; I have not used AI tools in this problem.
+
+;; 4.3 The two best-rated films with an evening showing, best first, with
+;;     the channel.
+(define best-evening
+  (select
+   title+channel
+   (limit
+    2
+    (order-by
+     (lambda (p)
+       (- (film-rating (car p))))
+     (where
+      (lambda (p)
+        (evening? (cdr p)))
+      (join same-title?
+            (table films)
+            (table showings)))))))
+
+(run best-evening)
+; '(("Kin-dza-dza!" 1) ("Stalker" 1))
+
+(define (best-evening/for)
+  (define matches
+    (for*/list ([f films]
+                [s showings]
+                #:when (same-title? f s)
+                #:when (evening? s))
+      (cons f s)))
+  (for/list ([p (take
+                 (sort matches
+                       >
+                       #:key
+                       (lambda (p)
+                         (film-rating (car p))))
+                 2)])
+    (list (film-title (car p))
+          (showing-channel (cdr p)))))
+
+(best-evening/for)
+; '(("Kin-dza-dza!" 1) ("Stalker" 1))
+
+;; I have not used AI tools in this problem.
+
+;; 4.4 (No AI) Which way reads better, one sentence per question:
+;; 4.1: the for version reads better because all three conditions are visible
+;;      together and the result is constructed directly
+
+;;4.2: the query version reads better because where, order-by, limit and select
+;;      make the stages of the question explicit
+
+;; 4.3: the query version reads better because it closely follows the wording:
+;;      filter evening showings, order by rating, take two and select the result
+
+;;; ===========================================================================
+;;; Section 5 (Three more rules)
+;;; ===========================================================================
+
+;; AI use declaration for 5.1. Keep one line and delete the other. Here the
+;; second line is usually the true one.
+;; I have used AI (chatgpt free) to produce the three rules, in accordance with the course rules and the sheet.
+
+;; 5.1 The assistant's three rules, each a function from a query to a
+;;     query, renamed so that all three can live in this file.
+
+;; Rule A:
+;; Move a where below a select:
+;; where p (select f Q) => select f (where (lambda (x) (p (f x))) Q)
+(define (rule/a q)
+  (match q
+    [(where p (select f source))
+     (select f
+             (where (lambda (row)
+                      (p (f row)))
+                    source))]
+    [_ q]))
+
+;; Rule B:
+;; Merge two nested limits:
+;; limit n (limit m Q) => limit (min n m) Q
+(define (rule/b q)
+  (match q
+    [(limit n (limit m source))
+     (limit (min n m) source )]
+    [_ q]))
+
+;; Rule C:
+;; Merge a where above a join into the join test:
+;; where p (join test L R) =>
+;; join (lambda (l r)
+;;        (and (test l r)
+;;             (p (cons l r))))
+;;      L R
+(define (rule/c q)
+  (match q
+    [(where p (join test left right))
+     (join (lambda (l r)
+             (and (test l r)
+                  (p (cons l r))))
+           left
+           right)]
+    [_ q]))
+
+;; I have not used AI tools in this problem.
+
+;; 5.2 (No AI) For each rule, a query on which it gives different rows from
+;;     run, or the reason it is correct on every query.
+(define breaks/a (table '()))
+(run breaks/a)          ; the rows
+(run (rule/a breaks/a)) ; the rows the rule gives
+;; rule/a:
+;; It is safe because a source row is kept exactly when (p (f row)) is true
+;; in both queries. The rewritten query applies f only to rows that survive
+;; that same test, so the resulting rows and their order are unchanged
+
+(define breaks/b (table '()))
+(run breaks/b)
+(run (rule/b breaks/b))
+;; rule/b:
+;; It is safe because taking the first m rows and then the first n rows is
+;; exactly the same as taking the first (min n m) rows. Therefore neither
+;; the rows nor their order can change
+
+(define breaks/c (table '()))
+(run breaks/c)
+(run (rule/c breaks/c))
+;; rule/c:
+;; It is safe because the original query keeps a joined pair exactly when
+;; both (test l r) and (p (cons l r)) are true. The rewritten join checks
+;; those same two conditions before producing the pair, so it gives the
+;; same rows in the same order
+
+;;; ===========================================================================
+;;; Section 6 (The audit)                                                No AI
+;;; ===========================================================================
+
+;; I have not used AI tools in this problem.
+
+;; In your own words. One or two sentences each.
+;; (a) What you asked the assistant to do, and in which problems:
+;;
+;; (b) What came back wrong, and how you found it:
+;;
+;; (c) The example or check in this file that catches it now:
+;;
+;; (d) Which problem you would not trust an assistant with, and why:
+;;
