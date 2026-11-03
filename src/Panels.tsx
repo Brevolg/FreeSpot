@@ -208,7 +208,6 @@ export function RecommendationPanel({
   }
 
   const isBest = ranked[0]?.id === spot.id
-  // Те же варианты и номера, что на схеме.
   const others = ranked
     .slice(0, 4)
     .filter((s) => s.id !== spot.id)

@@ -10,7 +10,6 @@ const CAR_COLORS = [
   { body: "#f4f5f6", roof: "#e6e8eb" },
 ]
 
-/** Автомобиль, вид сверху. Нос смотрит вверх, размер 42×80. */
 function TopCar({
   x,
   y,
@@ -254,7 +253,6 @@ export function ParkingMap({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // На телефоне схема прокручивается — подводим выбранное место к центру.
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !selected || el.scrollWidth <= el.clientWidth) return
