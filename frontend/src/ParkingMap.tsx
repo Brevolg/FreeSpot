@@ -352,20 +352,6 @@ export function ParkingMap({
 
         {ROWS.map(rowLines)}
 
-        <g className="map__gate">
-          <rect x="8" y="8" width="74" height="34" rx="17" />
-          <text x="38" y="30" textAnchor="middle">
-            Въезд
-          </text>
-          <path d="M 62 19 v 12 M 57 26 l 5 5 5 -5" />
-        </g>
-        <g className="map__gate map__gate--out">
-          <rect x="8" y="598" width="74" height="34" rx="17" />
-          <text x="38" y="620" textAnchor="middle">
-            Выезд
-          </text>
-        </g>
-
         <g className="map__lifts">
           <rect x="910" y="24" width="80" height="100" rx="14" />
           <SvgIcon name="lift" x={938} y={40} size={24} color="#1d2126" />
@@ -413,6 +399,19 @@ export function ParkingMap({
             onPick={() => onPick(s)}
           />
         ))}
+
+        <g className="map__gate">
+          <rect x="8" y="8" width="74" height="34" rx="17" />
+          <text x="38" y="30" textAnchor="middle">
+            Въезд
+          </text>
+        </g>
+        <g className="map__gate map__gate--out">
+          <rect x="8" y="598" width="74" height="34" rx="17" />
+          <text x="38" y="620" textAnchor="middle">
+            Выезд
+          </text>
+        </g>
       </svg>
     </div>
   )

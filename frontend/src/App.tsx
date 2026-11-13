@@ -3,13 +3,16 @@ import { SPOTS, ROWS, rankSpots, type VehicleType, type Priority, type Row, type
 import { Icon } from "./ui"
 import { ParkingMap, Legend, type MapMode } from "./ParkingMap"
 import { VehiclePanel, AvailabilityPanel, RecommendationPanel, RoutePanel, type Phase } from "./Panels"
+import { HomePage } from "./HomePage"
 
 export default function App() {
+  const [started, setStarted] = useState(false)
   const [vehicle, setVehicle] = useState<VehicleType | null>(null)
   const [charging, setCharging] = useState(false)
   const [accessible, setAccessible] = useState(false)
-  const [priority, setPriority] = useState<Priority>("lifts")
+  const [priority, setPriority] = useState<Priority>("entry")
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [activeZone, setActiveZone] = useState<Row | null>(null)
 
   const phase: Phase = vehicle ? "done" : "idle"
   const options: Options | null = vehicle
@@ -19,14 +22,18 @@ export default function App() {
     () => (options ? rankSpots(options) : []),
     [vehicle, charging, accessible, priority],
   )
-  const suitableIds = useMemo(() => new Set(ranked.map((s) => s.id)), [ranked])
+  const zoneRanked = useMemo(
+    () => (activeZone ? ranked.filter((s) => s.row === activeZone) : ranked),
+    [ranked, activeZone],
+  )
+  const suitableIds = useMemo(() => new Set(zoneRanked.map((s) => s.id)), [zoneRanked])
   const rankOf = useMemo(
-    () => new Map(ranked.map((s, i) => [s.id, i + 1])),
-    [ranked],
+    () => new Map(zoneRanked.map((s, i) => [s.id, i + 1])),
+    [zoneRanked],
   )
   const selected =
     phase === "done"
-      ? (ranked.find((s) => s.id === selectedId) ?? ranked[0])
+      ? (zoneRanked.find((s) => s.id === selectedId) ?? zoneRanked[0])
       : undefined
 
   const reset = () => {
@@ -38,13 +45,19 @@ export default function App() {
 
   const mapMode: MapMode = phase
   const alternatives = selected
-    ? ranked.slice(0, 4).filter((s) => s.id !== selected.id)
+    ? zoneRanked.slice(0, 4).filter((s) => s.id !== selected.id)
     : []
   const stateClass =
     phase === "done" ? (selected ? "is-result" : "is-empty") : "is-idle"
 
   const zoneFree = (z: Row) =>
-    SPOTS.filter((s) => s.row === z && !s.busy).length
+    vehicle
+      ? ranked.filter((s) => s.row === z).length
+      : SPOTS.filter((s) => s.row === z && !s.busy).length
+
+  if (!started) {
+    return <HomePage onFind={() => setStarted(true)} onMap={() => setStarted(true)} />
+  }
 
   return (
     <div className="shell">
@@ -53,7 +66,7 @@ export default function App() {
           <div className="brand">
             <span className="brand__mark">P</span>
             <div>
-              <b>Парковка</b>
+              <b>FreeSpot</b>
               <span>Подбор свободного места</span>
             </div>
           </div>
@@ -64,6 +77,9 @@ export default function App() {
               <span>40 мест</span>
             </span>
           </div>
+          <button className="home-link" type="button" onClick={() => setStarted(false)}>
+            На главную
+          </button>
         </header>
 
         <div className="board">
@@ -80,17 +96,23 @@ export default function App() {
                         : "Выберите тип автомобиля справа"}
                   </p>
                 </div>
-                <div className="zones" aria-label="Свободные места по зонам">
+                <div className="zones" role="group" aria-label="Фильтр по зонам">
                   {ROWS.map((z) => (
-                    <span
+                    <button
                       key={z}
                       className={`zone ${
-                        selected?.row === z ? "is-active" : ""
+                        (activeZone ?? selected?.row) === z ? "is-active" : ""
                       }`}
+                      type="button"
+                      aria-pressed={activeZone === z || (!activeZone && selected?.row === z)}
+                      onClick={() => {
+                        setActiveZone((current) => (current === z ? null : z))
+                        setSelectedId(null)
+                      }}
                     >
                       Зона {z}
                       <b>{zoneFree(z)}</b>
-                    </span>
+                    </button>
                   ))}
                 </div>
               </header>
@@ -136,7 +158,7 @@ export default function App() {
             <RecommendationPanel
               options={options}
               spot={selected}
-              ranked={ranked}
+              ranked={zoneRanked}
               onPick={(s) => setSelectedId(s.id)}
               onWithoutCharging={() => {
                 setCharging(false)
@@ -148,7 +170,7 @@ export default function App() {
               }}
               onReset={reset}
             />
-            <AvailabilityPanel fitCount={options ? ranked.length : null} />
+            <AvailabilityPanel fitCount={options ? zoneRanked.length : null} />
           </aside>
         </div>
       </div>

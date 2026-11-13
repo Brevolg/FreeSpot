@@ -125,7 +125,7 @@ function driveUnits(s: Spot) {
 
 export function routePath(s: Spot) {
   const end = { A: 122, B: 218, C: 422, D: 518 }[s.row]
-  return `M 45 6 V ${AISLE_Y[s.row]} H ${cellCx(s)} V ${end}`
+  return `M 45 42 V ${AISLE_Y[s.row]} H ${cellCx(s)} V ${end}`
 }
 
 function fits(s: Spot, o: Options) {
@@ -149,11 +149,11 @@ function fits(s: Spot, o: Options) {
 export function rankSpots(o: Options) {
   const distance = o.priority === "lifts" ? walkUnits : driveUnits
   return SPOTS.filter((s) => fits(s, o)).sort((a, b) => {
-    if (o.vehicle !== "suv") {
-      const reserved = Number(a.size === "large") - Number(b.size === "large")
-      if (reserved !== 0) return reserved
-    }
-    return distance(a) - distance(b)
+    const byDistance = distance(a) - distance(b)
+    if (byDistance !== 0) return byDistance
+    if (o.vehicle !== "suv")
+      return Number(a.size === "large") - Number(b.size === "large")
+    return 0
   })
 }
 
@@ -165,8 +165,8 @@ export function reasonsFor(s: Spot, o: Options, isBest: boolean) {
   if (isBest)
     list.push(
       o.priority === "lifts"
-        ? "При подборе учтена близость к лифтам."
-        : "При подборе учтён путь от въезда.",
+        ? "При подборе учтена близость к лифтам"
+        : "При подборе учтён путь от въезда",
     )
   return list
 }
