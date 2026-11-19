@@ -1,0 +1,99 @@
+name: freespot
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: freespot
+      POSTGRES_USER: freespot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-freespot}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U freespot -d freespot"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  backend:
+    build: ./backend
+    environment:
+      FREESPOT_ENVIRONMENT: ${FREESPOT_ENVIRONMENT:-docker}
+      FREESPOT_DATABASE_URL: postgresql+asyncpg://freespot:${POSTGRES_PASSWORD:-freespot}@postgres:5432/freespot
+      FREESPOT_SIMULATOR_ENABLED: ${FREESPOT_SIMULATOR_ENABLED:-true}
+      FREESPOT_API_KEY: ${FREESPOT_API_KEY:-change-me}
+      FREESPOT_OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+    logging: *logging
+
+  frontend:
+    build: ./frontend
+    ports: ["${FRONTEND_PORT:-8080}:80"]
+    depends_on: [backend]
+    restart: unless-stopped
+    logging: *logging
+
+  # ---------- наблюдаемость ----------
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    volumes:
+      - ./deploy/prometheus:/etc/prometheus:ro
+      - promdata:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+    logging: *logging
+
+  loki:
+    image: grafana/loki:3.2.1
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes: [lokidata:/loki]
+    restart: unless-stopped
+    logging: *logging
+
+  alloy:
+    image: grafana/alloy:v1.5.0
+    command: run /etc/alloy/config.alloy --storage.path=/var/lib/alloy/data
+    volumes:
+      - ./deploy/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on: [loki]
+    restart: unless-stopped
+    logging: *logging
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    ports: ["127.0.0.1:16686:16686"]
+    restart: unless-stopped
+    logging: *logging
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/freespot.json
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    ports: ["${GRAFANA_PORT:-3000}:3000"]
+    depends_on: [prometheus, loki, jaeger]
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  promdata:
+  lokidata:
+  grafanadata:
