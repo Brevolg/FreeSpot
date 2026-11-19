@@ -16,5 +16,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 8443,
     strictPort: true,
+    // запросы /api уходят на бэкенд (uvicorn на :8000)
+    proxy: {
+      "/api": process.env.VITE_API_PROXY ?? "http://localhost:8000",
+    },
   },
 })

@@ -1,0 +1,35 @@
+groups:
+  - name: freespot
+    rules:
+      - alert: BackendDown
+        expr: up{job="freespot-backend"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations: { summary: "Бэкенд FreeSpot недоступен" }
+
+      - alert: High5xxRate
+        expr: sum(rate(http_requests_total{job="freespot-backend",status="5xx"}[5m])) / clamp_min(sum(rate(http_requests_total{job="freespot-backend"}[5m])), 1e-9) > 0.05
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "Больше 5% ответов API с ошибкой 5xx" }
+
+      - alert: SlowRecommendations
+        expr: histogram_quantile(0.95, sum by (le) (rate(freespot_recommend_duration_seconds_bucket[5m]))) > 0.25
+        for: 5m
+        labels: { severity: warning }
+        annotations: { summary: "p95 расчёта рекомендации выше 250 мс" }
+
+      - alert: LowAssignmentSuccess
+        # целевой порог из бизнес-анализа — не менее 80%
+        expr: |
+          sum(increase(freespot_assignments_total{status="parked"}[30m]))
+            / clamp_min(sum(increase(freespot_assignments_total{status=~"parked|misparked|lost|expired"}[30m])), 1) < 0.8
+        for: 10m
+        labels: { severity: warning }
+        annotations: { summary: "Assignment Success Rate ниже 80%" }
+
+      - alert: ParkingFull
+        expr: sum(freespot_spots{state="free"}) == 0
+        for: 5m
+        labels: { severity: info }
+        annotations: { summary: "На парковке нет свободных мест" }

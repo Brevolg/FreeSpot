@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import { Icon, ICONS, type IconName } from "./ui"
-import { SPOTS, ROWS, CELL_W, CELL_H, ROW_TOP, NOSE_DOWN, cellX, cellCx, routePath, type Row, type Spot } from "./parking"
+import { ROWS, CELL_W, CELL_H, ROW_TOP, NOSE_DOWN, cellX, cellCx, routePath, type Row, type Spot } from "./parking"
 
 const CAR_COLORS = [
   { body: "#f4f5f6", roof: "#e6e8eb" },
@@ -237,6 +237,7 @@ function MapCell({
 }
 
 export function ParkingMap({
+  spots: SPOTS,
   mode,
   selected,
   alternatives,
@@ -244,6 +245,7 @@ export function ParkingMap({
   suitableIds,
   onPick,
 }: {
+  spots: Spot[]
   mode: MapMode
   selected?: Spot
   alternatives: Spot[]

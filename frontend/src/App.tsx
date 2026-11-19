@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react"
-import { SPOTS, ROWS, rankSpots, type VehicleType, type Priority, type Row, type Options } from "./parking"
+import { useEffect, useMemo, useState } from "react"
+import { ROWS, type VehicleType, type Priority, type Row, type Options, type Spot } from "./parking"
+import { recommend, useParkingSpots } from "./api"
 import { Icon } from "./ui"
 import { ParkingMap, Legend, type MapMode } from "./ParkingMap"
 import { VehiclePanel, AvailabilityPanel, RecommendationPanel, RoutePanel, type Phase } from "./Panels"
@@ -14,14 +15,31 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activeZone, setActiveZone] = useState<Row | null>(null)
 
-  const phase: Phase = vehicle ? "done" : "idle"
+  const { spots, loaded, error } = useParkingSpots()
+  const [reco, setReco] = useState<{ key: string; ids: string[] } | null>(null)
+
   const options: Options | null = vehicle
     ? { vehicle, charging, accessible, priority }
     : null
-  const ranked = useMemo(
-    () => (options ? rankSpots(options) : []),
-    [vehicle, charging, accessible, priority],
-  )
+  const optionsKey = options ? JSON.stringify(options) : ""
+  // при каждом обновлении занятости пересчитываем подбор
+  const occupancyKey = spots.map((s) => (s.busy ? 1 : 0)).join("")
+
+  useEffect(() => {
+    if (!options) return
+    const ctrl = new AbortController()
+    recommend(options, ctrl.signal)
+      .then((ids) => setReco({ key: optionsKey, ids }))
+      .catch(() => {})
+    return () => ctrl.abort()
+  }, [optionsKey, occupancyKey])
+
+  const phase: Phase = options && reco?.key === optionsKey ? "done" : "idle"
+  const ranked = useMemo(() => {
+    if (phase !== "done" || !reco) return []
+    const byId = new Map(spots.map((s) => [s.id, s]))
+    return reco.ids.map((id) => byId.get(id)).filter((s): s is Spot => !!s)
+  }, [phase, reco, spots])
   const zoneRanked = useMemo(
     () => (activeZone ? ranked.filter((s) => s.row === activeZone) : ranked),
     [ranked, activeZone],
@@ -51,12 +69,19 @@ export default function App() {
     phase === "done" ? (selected ? "is-result" : "is-empty") : "is-idle"
 
   const zoneFree = (z: Row) =>
-    vehicle
+    phase === "done"
       ? ranked.filter((s) => s.row === z).length
-      : SPOTS.filter((s) => s.row === z && !s.busy).length
+      : spots.filter((s) => s.row === z && !s.busy).length
 
   if (!started) {
-    return <HomePage onFind={() => setStarted(true)} onMap={() => setStarted(true)} />
+    return (
+      <HomePage
+        spots={spots}
+        loaded={loaded}
+        onFind={() => setStarted(true)}
+        onMap={() => setStarted(true)}
+      />
+    )
   }
 
   return (
@@ -74,7 +99,8 @@ export default function App() {
             <span className="place">
               <b>Обзор парковки</b>
               <span>Уровень P1</span>
-              <span>40 мест</span>
+              <span>{spots.length} мест</span>
+              {error && <span role="status">нет связи с сервером</span>}
             </span>
           </div>
           <button className="home-link" type="button" onClick={() => setStarted(false)}>
@@ -118,6 +144,7 @@ export default function App() {
               </header>
               <div className="card--map__body">
                 <ParkingMap
+                  spots={spots}
                   mode={mapMode}
                   selected={selected}
                   alternatives={alternatives}
@@ -170,7 +197,10 @@ export default function App() {
               }}
               onReset={reset}
             />
-            <AvailabilityPanel fitCount={options ? zoneRanked.length : null} />
+            <AvailabilityPanel
+              spots={spots}
+              fitCount={phase === "done" ? zoneRanked.length : null}
+            />
           </aside>
         </div>
       </div>

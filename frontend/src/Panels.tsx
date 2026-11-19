@@ -1,5 +1,5 @@
 import { Button, Card, Icon, ToggleChip } from "./ui"
-import { SPOTS, SIZE_INFO, ZONE_INFO, VEHICLES, reasonsFor, routeSteps, type VehicleType, type Priority, type Spot, type Options } from "./parking"
+import { SIZE_INFO, ZONE_INFO, VEHICLES, reasonsFor, routeSteps, type VehicleType, type Priority, type Spot, type Options } from "./parking"
 
 export type Phase = "idle" | "done"
 
@@ -91,7 +91,13 @@ export function VehiclePanel({
   )
 }
 
-export function AvailabilityPanel({ fitCount }: { fitCount: number | null }) {
+export function AvailabilityPanel({
+  spots: SPOTS,
+  fitCount,
+}: {
+  spots: Spot[]
+  fitCount: number | null
+}) {
   const free = SPOTS.filter((s) => !s.busy)
   const stats = [
     {

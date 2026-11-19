@@ -19,37 +19,6 @@ export interface Options {
   priority: Priority
 }
 
-const BUSY = new Set([
-  "A01",
-  "A02",
-  "A04",
-  "A05",
-  "A07",
-  "A08",
-  "A10",
-  "B01",
-  "B02",
-  "B04",
-  "B05",
-  "B06",
-  "B08",
-  "B10",
-  "C01",
-  "C02",
-  "C03",
-  "C04",
-  "C05",
-  "C06",
-  "C08",
-  "C09",
-  "D01",
-  "D02",
-  "D03",
-  "D05",
-  "D07",
-  "D09",
-])
-
 export const ROWS: Row[] = ["A", "B", "C", "D"]
 
 function sizeFor(row: Row, i: number): SpotSize {
@@ -59,6 +28,7 @@ function sizeFor(row: Row, i: number): SpotSize {
   return "standard"
 }
 
+// План уровня P1. Занятость (busy) приходит с бэкенда — см. api.ts
 export const SPOTS: Spot[] = ROWS.flatMap((row) =>
   Array.from({ length: 10 }, (_, i) => {
     const id = `${row}${String(i + 1).padStart(2, "0")}`
@@ -68,7 +38,7 @@ export const SPOTS: Spot[] = ROWS.flatMap((row) =>
       index: i,
       size: sizeFor(row, i),
       ev: row === "C" && i < 4,
-      busy: BUSY.has(id),
+      busy: false,
     }
   }),
 )
@@ -97,7 +67,6 @@ export const VEHICLES: Array<{ id: VehicleType; label: string; dims: string }> =
 export const CELL_W = 80
 export const CELL_H = 110
 export const ROW_TOP: Record<Row, number> = { A: 20, B: 210, C: 320, D: 510 }
-const ROW_EDGE: Record<Row, number> = { A: 130, B: 210, C: 430, D: 510 }
 const AISLE_Y: Record<Row, number> = { A: 170, B: 170, C: 470, D: 470 }
 export const NOSE_DOWN: Record<Row, boolean> = {
   A: true,
@@ -105,56 +74,13 @@ export const NOSE_DOWN: Record<Row, boolean> = {
   C: true,
   D: false,
 }
-const LIFT = { x: 950, y: 130 }
 
 export const cellX = (s: Spot) => 100 + s.index * CELL_W
 export const cellCx = (s: Spot) => cellX(s) + CELL_W / 2
 
-function walkUnits(s: Spot) {
-  const aisle = AISLE_Y[s.row]
-  return (
-    Math.abs(ROW_EDGE[s.row] - aisle) +
-    Math.abs(LIFT.x - cellCx(s)) +
-    Math.abs(aisle - LIFT.y)
-  )
-}
-
-function driveUnits(s: Spot) {
-  return AISLE_Y[s.row] + (cellCx(s) - 45) + 40
-}
-
 export function routePath(s: Spot) {
   const end = { A: 122, B: 218, C: 422, D: 518 }[s.row]
   return `M 45 42 V ${AISLE_Y[s.row]} H ${cellCx(s)} V ${end}`
-}
-
-function fits(s: Spot, o: Options) {
-  if (s.busy) return false
-  if (o.accessible) {
-    return (
-      s.size === "accessible" &&
-      o.vehicle !== "suv" &&
-      !(o.vehicle === "electric" && o.charging && !s.ev)
-    )
-  }
-  if (s.size === "accessible") return false
-  if (o.vehicle === "electric" && o.charging) return s.ev
-  if (s.ev && o.vehicle !== "electric") return false
-  if (o.vehicle === "suv") return s.size === "large"
-  if (o.vehicle === "sedan" || o.vehicle === "electric")
-    return s.size !== "compact"
-  return true
-}
-
-export function rankSpots(o: Options) {
-  const distance = o.priority === "lifts" ? walkUnits : driveUnits
-  return SPOTS.filter((s) => fits(s, o)).sort((a, b) => {
-    const byDistance = distance(a) - distance(b)
-    if (byDistance !== 0) return byDistance
-    if (o.vehicle !== "suv")
-      return Number(a.size === "large") - Number(b.size === "large")
-    return 0
-  })
 }
 
 export function reasonsFor(s: Spot, o: Options, isBest: boolean) {

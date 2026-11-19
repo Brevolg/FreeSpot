@@ -1,9 +1,18 @@
-import { SPOTS, ROWS } from "./parking"
+import { ROWS, type Spot } from "./parking"
 import { Icon } from "./ui"
 
-const freeSpots = SPOTS.filter((spot) => !spot.busy)
-
-export function HomePage({ onFind, onMap }: { onFind: () => void; onMap: () => void }) {
+export function HomePage({
+  spots: SPOTS,
+  loaded,
+  onFind,
+  onMap,
+}: {
+  spots: Spot[]
+  loaded: boolean
+  onFind: () => void
+  onMap: () => void
+}) {
+  const freeSpots = SPOTS.filter((spot) => !spot.busy)
   return (
     <main className="home-shell">
       <div className="home-page">
@@ -46,7 +55,7 @@ export function HomePage({ onFind, onMap }: { onFind: () => void; onMap: () => v
               </div>
             </div>
             <div className="home-free-count">
-              <strong>{freeSpots.length.toString().padStart(2, "0")}</strong>
+              <strong>{loaded ? freeSpots.length.toString().padStart(2, "0") : "--"}</strong>
               <span><b>свободных мест</b><small>из {SPOTS.length} на уровне P1</small></span>
             </div>
             <div className="home-occupancy">
