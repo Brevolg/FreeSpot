@@ -69,20 +69,32 @@ kubectl -n team-3 port-forward svc/freespot-frontend 18080:80
 curl -f http://localhost:18080/ready
 ```
 
-## CI/CD
+## CI и ручной Deploy
 
-`.github/workflows/ci-cd.yml`:
+`ci-cd.yml` запускает backend pytest и проверку Helm на push/PR. На push в `master` или `devops/**` он также собирает amd64-образы, выполняет typecheck/frontend build и публикует в GHCR с тегом `sha-<commit>`. Этот workflow не выполняет деплой.
 
-1. На push/PR — backend pytest и проверка Helm.
-2. На push в `master` или `devops/**` — сборка amd64-образов, typecheck/frontend build и публикация в GHCR с тегом `sha-<commit>`.
-3. На `master`, если repository variable `DEPLOY_ENABLED=true`, — деплой через runner с метками `self-hosted, linux, team-3`. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз (`--atomic` в Helm 3, `--rollback-on-failure` в Helm 4).
+Отдельный workflow `.github/workflows/deploy.yml` называется **Deploy** и запускается только вручную:
 
-Для включения автодеплоя администратору репозитория необходимо:
+1. После слияния PR в `master` откройте **Actions → Deploy → Run workflow**.
+2. Выберите ветку, которую нужно развернуть, и нажмите **Run workflow**.
+3. Workflow проверит и соберёт выбранный commit через тот же CI, опубликует образы, выполнит Helm-деплой и проверит сайт/API через Ingress.
 
-- Подключить Linux self-hosted runner с меткой `team-3` в сети с доступом к `10.93.26.212:6443`. Runner должен иметь Python 3, bash, curl, tar и доступ к GitHub; kubectl и Helm устанавливает workflow. Не запускайте PR из непроверенных веток на этом runner.
-- Добавить repository secret `KUBECONFIG`: полное содержимое `team-3.kubeconfig`.
-- Убедиться, что packages доступны workflow (наследование разрешений от `Brevolg/FreeSpot`); при приватных пакетах настройте `imagePullSecrets`.
-- Добавить repository variable `DEPLOY_ENABLED=true` после подключения runner.
+Кнопка ручного запуска появится после добавления workflow в основную ветку. Запуск доступен участникам с правом записи. Запуск из терминала:
+
+```bash
+gh workflow run deploy.yml --repo Brevolg/FreeSpot --ref master
+```
+
+Перед первым запуском:
+
+- Владелец личного репозитория регистрирует Linux x64 self-hosted runner с меткой `team-3` через **Settings → Actions → Runners → New self-hosted runner**. Runner должен работать в сети с доступом к `10.93.26.212:6443` и к адресу Ingress по HTTP. Ему нужны Python 3, bash, curl, tar и доступ к GitHub; kubectl и Helm устанавливает workflow. Не запускайте PR из непроверенных веток на этом runner.
+- Collaborator может добавить repository secret `KUBECONFIG`: полное содержимое `team-3.kubeconfig`, без base64-кодирования, через **Settings → Secrets and variables → Actions → New repository secret**. Либо с Mac:
+
+```bash
+gh secret set KUBECONFIG --repo Brevolg/FreeSpot < "$HOME/Downloads/team-3.kubeconfig"
+```
+
+Переменная `DEPLOY_ENABLED` не используется. Деплой на push, merge или по расписанию не запускается. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз (`--atomic` в Helm 3, `--rollback-on-failure` в Helm 4). Проверка Ingress выполняется после Helm; при её ошибке workflow завершится неуспешно, установленный релиз останется для диагностики.
 
 Для приватных пакетов начальная загрузка registry credentials выполняется локально один раз. Следите за сроком токена; после ротации повторите `registry-secret.py`. Первый запуск допускает до 15 минут на скачивание образов по медленному каналу. GitHub hosted runner не имеет прямого маршрута в приватную сеть кластера.
 

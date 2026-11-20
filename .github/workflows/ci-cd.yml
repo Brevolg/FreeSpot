@@ -1,10 +1,10 @@
-name: FreeSpot CI/CD
+name: FreeSpot CI
 on:
   push:
     branches: [master, 'devops/**']
   pull_request:
     branches: [master]
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
@@ -64,39 +64,3 @@ jobs:
           build-args: VITE_BASE_PATH=/team-3/
           cache-from: type=gha,scope=${{ matrix.component }}
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
-  deploy:
-    needs: build
-    if: github.ref == 'refs/heads/master' && vars.DEPLOY_ENABLED == 'true'
-    # The API server is in a private network. Register this runner there.
-    runs-on: [self-hosted, linux, team-3]
-    timeout-minutes: 20
-    concurrency:
-      group: freespot-team-3-deploy
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v5
-      - uses: azure/setup-helm@v5
-        with:
-          version: v3.18.4
-      - uses: azure/setup-kubectl@v5
-        with:
-          version: v1.31.5
-      - name: Configure Kubernetes access
-        env:
-          KUBE_CONFIG: ${{ secrets.KUBECONFIG }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$KUBE_CONFIG"
-          umask 077
-          CONFIG=$(mktemp)
-          printf '%s' "$KUBE_CONFIG" > "$CONFIG"
-          echo "KUBECONFIG=$CONFIG" >> "$GITHUB_ENV"
-      - name: Deploy release
-        env:
-          IMAGE_TAG: sha-${{ github.sha }}
-        run: deploy/k8s/deploy.sh
-      - name: Remove kubeconfig
-        if: always()
-        run: |
-          if [ -n "${KUBECONFIG:-}" ]; then rm -f "$KUBECONFIG"; fi

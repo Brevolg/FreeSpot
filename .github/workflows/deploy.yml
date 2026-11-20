@@ -1,0 +1,56 @@
+name: Deploy
+run-name: Deploy ${{ github.ref_name }} by @${{ github.actor }}
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/ci-cd.yml
+  deploy:
+    needs: build
+    # The API server is in a private network. Register this runner there.
+    runs-on: [self-hosted, linux, x64, team-3]
+    timeout-minutes: 20
+    concurrency:
+      group: freespot-team-3-deploy
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v5
+        with:
+          version: v3.18.4
+      - uses: azure/setup-kubectl@v5
+        with:
+          version: v1.31.5
+      - name: Configure Kubernetes access
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBECONFIG }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$KUBE_CONFIG"
+          umask 077
+          CONFIG=$(mktemp)
+          printf '%s' "$KUBE_CONFIG" > "$CONFIG"
+          echo "KUBECONFIG=$CONFIG" >> "$GITHUB_ENV"
+      - name: Deploy release
+        env:
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: deploy/k8s/deploy.sh
+      - name: Verify deployed application
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(kubectl -n team-3 get ingress freespot -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          test -n "$ADDRESS"
+          python3 deploy/k8s/verify.py "http://$ADDRESS/team-3/"
+      - name: Remove kubeconfig
+        if: always()
+        run: |
+          if [ -n "${KUBECONFIG:-}" ]; then rm -f "$KUBECONFIG"; fi
