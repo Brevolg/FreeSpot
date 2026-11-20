@@ -5,8 +5,7 @@ backend:
 frontend:
   image: ghcr.io/brevolg/freespot-frontend
   tag: ""
-imagePullSecrets:
-  - name: freespot-registry
+imagePullSecrets: [] # Public GHCR images; add a secret only for private packages.
 secretName: freespot-secrets
 rootPath: /team-3
 simulatorEnabled: true

@@ -20,9 +20,9 @@ Compose остаётся отдельным вариантом локально�
 
 ```bash
 export KUBECONFIG="$HOME/Downloads/team-3.kubeconfig"
-gh auth refresh -h github.com -s read:packages,write:packages
-python3 deploy/k8s/registry-secret.py
 ```
+
+Опубликованные CI образы публичны, авторизация для деплоя не нужна. Для приватных пакетов выполните `gh auth refresh -h github.com -s read:packages` и `python3 deploy/k8s/registry-secret.py`, затем передайте деплою `--set imagePullSecrets[0].name=freespot-registry`.
 
 `registry-secret.py` читает токен из keychain через `gh`, создаёт `freespot-registry` и выполняет Docker login через stdin. Токен не выводится и не попадает в аргументы процессов. Аккаунт должен иметь доступ к пакетам `ghcr.io/brevolg/freespot-backend` и `ghcr.io/brevolg/freespot-frontend` (для ручной публикации — также право записи).
 
@@ -33,7 +33,7 @@ export IMAGE_TAG=sha-<полный-commit-sha>
 deploy/k8s/deploy.sh
 ```
 
-Для ручной сборки и публикации:
+Для ручной сборки и публикации сначала выполните `gh auth refresh -h github.com -s read:packages,write:packages` и `python3 deploy/k8s/registry-secret.py`:
 
 ```bash
 export IMAGE_TAG=sha-$(git rev-parse HEAD)
@@ -56,6 +56,7 @@ kubectl -n team-3 get ingress freespot
 # Используйте один из адресов ADDRESS:
 curl -f http://<ADDRESS>/team-3/ready
 curl -f http://<ADDRESS>/team-3/api/spots
+python3 deploy/k8s/verify.py http://<ADDRESS>/team-3/
 ```
 
 Приложение: `http://<ADDRESS>/team-3/` (со слешем в конце). Swagger: `http://<ADDRESS>/team-3/docs`. Адреса находятся в приватной сети; chart не выпускает TLS-сертификат.
@@ -80,10 +81,10 @@ curl -f http://localhost:18080/ready
 
 - Подключить Linux self-hosted runner с меткой `team-3` в сети с доступом к `10.93.26.212:6443`. Runner должен иметь Python 3, bash, curl, tar и доступ к GitHub; kubectl и Helm устанавливает workflow. Не запускайте PR из непроверенных веток на этом runner.
 - Добавить repository secret `KUBECONFIG`: полное содержимое `team-3.kubeconfig`.
-- Убедиться, что packages доступны workflow (наследование разрешений от `Brevolg/FreeSpot`) и аккаунту из `freespot-registry`.
+- Убедиться, что packages доступны workflow (наследование разрешений от `Brevolg/FreeSpot`); при приватных пакетах настройте `imagePullSecrets`.
 - Добавить repository variable `DEPLOY_ENABLED=true` после подключения runner.
 
-Начальная загрузка registry credentials выполняется локально один раз. Следите за сроком токена; после ротации повторите `registry-secret.py`. GitHub hosted runner не имеет прямого маршрута в приватную сеть кластера.
+Для приватных пакетов начальная загрузка registry credentials выполняется локально один раз. Следите за сроком токена; после ротации повторите `registry-secret.py`. GitHub hosted runner не имеет прямого маршрута в приватную сеть кластера.
 
 ## Обслуживание
 
