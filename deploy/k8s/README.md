@@ -16,7 +16,7 @@ Compose остаётся отдельным вариантом локально�
 
 ## Первый запуск с Mac
 
-Требуются Docker Buildx, kubectl, Helm 3.18+ и GitHub CLI. Кластер доступен из приватной сети.
+Требуются Docker Buildx, kubectl, Helm 3.18+ или 4 и GitHub CLI. Кластер доступен из приватной сети.
 
 ```bash
 export KUBECONFIG="$HOME/Downloads/team-3.kubeconfig"
@@ -74,7 +74,7 @@ curl -f http://localhost:18080/ready
 
 1. На push/PR — backend pytest и проверка Helm.
 2. На push в `master` или `devops/**` — сборка amd64-образов, typecheck/frontend build и публикация в GHCR с тегом `sha-<commit>`.
-3. На `master`, если repository variable `DEPLOY_ENABLED=true`, — деплой через runner с метками `self-hosted, linux, team-3`. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз с `--atomic`.
+3. На `master`, если repository variable `DEPLOY_ENABLED=true`, — деплой через runner с метками `self-hosted, linux, team-3`. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз (`--atomic` в Helm 3, `--rollback-on-failure` в Helm 4).
 
 Для включения автодеплоя администратору репозитория необходимо:
 
