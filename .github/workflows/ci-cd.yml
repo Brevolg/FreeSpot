@@ -25,6 +25,8 @@ jobs:
         working-directory: backend
       - run: python -m pytest -q
         working-directory: backend
+      - name: Check registry credential handling
+        run: python -m unittest discover -s deploy/k8s -p 'test_*.py'
       - uses: azure/setup-helm@v5
         with:
           version: v3.18.4

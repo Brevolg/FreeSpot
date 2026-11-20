@@ -22,9 +22,16 @@ Compose остаётся отдельным вариантом локально�
 export KUBECONFIG="$HOME/Downloads/team-3.kubeconfig"
 ```
 
-Опубликованные CI образы публичны, авторизация для деплоя не нужна. Для приватных пакетов выполните `gh auth refresh -h github.com -s read:packages` и `python3 deploy/k8s/registry-secret.py`, затем передайте деплою `--set imagePullSecrets[0].name=freespot-registry`.
+Образы `ghcr.io/freespott/freespot-backend` и `ghcr.io/freespott/freespot-frontend` остаются **приватными**. Chart использует `imagePullSecrets: [{name: freespot-registry}]`. Для Kubernetes нужен отдельный Personal access token (classic) с единственным scope `read:packages`, от аккаунта с доступом к обоим пакетам. Не используйте для постоянного imagePullSecret временный `GITHUB_TOKEN` workflow: он истекает после job, а Kubernetes может скачивать образы позже.
 
-`registry-secret.py` читает токен из keychain через `gh`, создаёт `freespot-registry` и выполняет Docker login через stdin. Токен не выводится и не попадает в аргументы процессов. Аккаунт должен иметь доступ к пакетам `ghcr.io/freespott/freespot-backend` и `ghcr.io/freespott/freespot-frontend` (для ручной публикации — также право записи).
+Для ручного деплоя с Mac создайте Secret один раз:
+
+```bash
+export GHCR_USERNAME=ARCshekin
+python3 deploy/k8s/registry-secret.py
+```
+
+Скрипт безопасно запросит read token, проверит возможность скачивания обоих пакетов и создаст Kubernetes Secret. Он не читает токен GitHub CLI, не выполняет Docker login и не выводит credentials. В CI токен передаётся через окружение из GitHub Actions secret `GHCR_READ_TOKEN`; логин — из repository variable `GHCR_USERNAME`. Если задан `IMAGE_TAG`, перед обновлением Secret проверяется доступ к точному тегу обоих образов.
 
 После публикации образов CI:
 
@@ -33,7 +40,7 @@ export IMAGE_TAG=sha-<полный-commit-sha>
 deploy/k8s/deploy.sh
 ```
 
-Для ручной сборки и публикации сначала выполните `gh auth refresh -h github.com -s read:packages,write:packages` и `python3 deploy/k8s/registry-secret.py`:
+Для ручной сборки и публикации отдельно выполните Docker login в GHCR с токеном издателя, имеющим `write:packages` (через `docker login ghcr.io -u <логин> --password-stdin`). Токен издателя не сохраняйте в Kubernetes; `freespot-registry` использует только read token:
 
 ```bash
 export IMAGE_TAG=sha-$(git rev-parse HEAD)
@@ -77,7 +84,7 @@ curl -f http://localhost:18080/ready
 
 1. После слияния PR в `master` откройте **Actions → Deploy → Run workflow**.
 2. Выберите ветку, которую нужно развернуть, и нажмите **Run workflow**.
-3. Workflow проверит и соберёт выбранный commit через тот же CI, опубликует образы, выполнит Helm-деплой и проверит сайт/API через Ingress.
+3. Workflow проверит и соберёт выбранный commit через тот же CI, опубликует приватные образы, проверит read token и обновит imagePullSecret, выполнит Helm-деплой и проверит сайт/API через Ingress.
 
 Кнопка ручного запуска появится после добавления workflow в основную ветку. Запуск доступен участникам с правом записи. Запуск из терминала:
 
@@ -101,9 +108,18 @@ python3 deploy/runner/bootstrap.py
 gh secret set KUBECONFIG --repo FreeSpott/FreeSpot < "$HOME/Downloads/team-3.kubeconfig"
 ```
 
+Для приватных образов добавьте repository secret `GHCR_READ_TOKEN` с отдельным PAT classic, scope только `read:packages`, и repository variable `GHCR_USERNAME` с логином владельца PAT (сейчас `ARCshekin`). Токен создаётся в личных **Settings → Developer settings → Personal access tokens → Tokens (classic)**, а не fine-grained tokens. Аккаунт должен иметь read-доступ к обоим пакетам. При обязательном SSO организации авторизуйте токен для неё.
+
+```bash
+gh secret set GHCR_READ_TOKEN --repo FreeSpott/FreeSpot
+gh variable set GHCR_USERNAME --repo FreeSpott/FreeSpot --body ARCshekin
+```
+
+Первая команда интерактивно запросит токен; не указывайте его в аргументах команды или в Git. Перед истечением срока PAT замените GitHub secret и вручную запустите Deploy, чтобы обновился Kubernetes Secret. Обновление пароля в GitHub secret само по себе не меняет Secret в кластере. Сбой проверки credentials прерывает workflow до изменения Helm-релиза и Kubernetes pull-secret.
+
 Переменная `DEPLOY_ENABLED` не используется. Деплой на push, merge или по расписанию не запускается. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз (`--atomic` в Helm 3, `--rollback-on-failure` в Helm 4). Проверка Ingress выполняется после Helm; при её ошибке workflow завершится неуспешно, установленный релиз останется для диагностики.
 
-Для приватных пакетов начальная загрузка registry credentials выполняется локально один раз. Следите за сроком токена; после ротации повторите `registry-secret.py`. Первый запуск допускает до 15 минут на скачивание образов по медленному каналу. GitHub hosted runner не имеет прямого маршрута в приватную сеть кластера.
+Первый запуск допускает до 15 минут на скачивание образов по медленному каналу. GitHub hosted runner не имеет прямого маршрута в приватную сеть кластера.
 
 ## Обслуживание
 

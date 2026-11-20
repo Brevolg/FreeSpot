@@ -8,6 +8,7 @@ case "$(helm version --template '{{.Version}}')" in
   v4.*) rollback_flags=(--rollback-on-failure --wait=legacy) ;;
   *) echo "Helm 3 or 4 required" >&2; exit 1 ;;
 esac
+kubectl --namespace team-3 get secret freespot-registry -o name > /dev/null
 python3 deploy/k8s/bootstrap-secrets.py
 helm upgrade --install freespot deploy/helm/freespot \
   --namespace team-3 \
