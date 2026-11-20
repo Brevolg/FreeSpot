@@ -1,0 +1,6 @@
+apiVersion: v2
+name: freespot
+description: FreeSpot on the team-3 Kubernetes node
+version: 0.1.0
+appVersion: "1.0.0"
+type: application

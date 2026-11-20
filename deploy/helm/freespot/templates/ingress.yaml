@@ -1,0 +1,44 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: freespot-strip-prefix
+spec:
+  stripPrefix:
+    prefixes: [{{ .Values.rootPath | quote }}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: freespot
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: {{ .Release.Namespace }}-freespot-strip-prefix@kubernetescrd
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - {{ if .Values.ingress.host }}host: {{ .Values.ingress.host | quote }}{{ end }}
+      http:
+        paths:
+          - path: {{ .Values.rootPath }}
+            pathType: Prefix
+            backend:
+              service:
+                name: freespot-frontend
+                port: {number: 80}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: freespot-allow-traefik
+spec:
+  podSelector:
+    matchLabels: {app: freespot-frontend}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: traefik}
+      ports: [{protocol: TCP, port: 8080}]
+{{- end }}
