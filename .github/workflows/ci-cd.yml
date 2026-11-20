@@ -69,7 +69,7 @@ jobs:
     if: github.ref == 'refs/heads/master' && vars.DEPLOY_ENABLED == 'true'
     # The API server is in a private network. Register this runner there.
     runs-on: [self-hosted, linux, team-3]
-    timeout-minutes: 10
+    timeout-minutes: 20
     concurrency:
       group: freespot-team-3-deploy
       cancel-in-progress: false

@@ -13,5 +13,5 @@ helm upgrade --install freespot deploy/helm/freespot \
   --namespace team-3 \
   --set-string "backend.tag=$IMAGE_TAG" \
   --set-string "frontend.tag=$IMAGE_TAG" \
-  "${rollback_flags[@]}" --timeout 5m "$@"
+  "${rollback_flags[@]}" --timeout 15m "$@"
 kubectl --namespace team-3 get pods,ingress,pvc -l app.kubernetes.io/part-of=freespot
