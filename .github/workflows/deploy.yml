@@ -39,6 +39,12 @@ jobs:
           CONFIG=$(mktemp)
           printf '%s' "$KUBE_CONFIG" > "$CONFIG"
           echo "KUBECONFIG=$CONFIG" >> "$GITHUB_ENV"
+      - name: Configure private image pull access
+        env:
+          GHCR_USERNAME: ${{ vars.GHCR_USERNAME }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: python3 deploy/k8s/registry-secret.py
       - name: Deploy release
         env:
           IMAGE_TAG: sha-${{ github.sha }}
