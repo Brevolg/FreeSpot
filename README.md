@@ -56,7 +56,11 @@ cd frontend
 pnpm install && pnpm dev
 ```
 
-## Деплой в облако
+## Деплой в Kubernetes (team-3)
+
+Helm chart, настройка GHCR, первый запуск и CI/CD описаны в [deploy/k8s/README.md](deploy/k8s/README.md).
+
+## Деплой на VM с Docker
 
 Подойдёт любая VM с Docker (Yandex Cloud, MTS Cloud, VK Cloud и т.п.), 2 vCPU и 4 ГБ RAM:
 

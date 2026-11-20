@@ -63,6 +63,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(
         title="FreeSpot API",
+        root_path=settings.root_path,
         version="1.0.0",
         description="Подбор парковочного места по параметрам автомобиля и текущей занятости.",
         lifespan=lifespan,

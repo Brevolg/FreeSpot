@@ -1,0 +1,92 @@
+# Based on quiner1793/devops-templates/4_github_actions/runner_chart.
+apiVersion: v1
+kind: Service
+metadata:
+  name: freespot-actions-runner
+  namespace: team-3
+spec:
+  clusterIP: None
+  selector: {app: freespot-actions-runner}
+  ports: [{name: unused, port: 8080}]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: freespot-actions-runner
+  namespace: team-3
+spec:
+  serviceName: freespot-actions-runner
+  replicas: 1
+  selector:
+    matchLabels: {app: freespot-actions-runner}
+  template:
+    metadata:
+      labels: {app: freespot-actions-runner}
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector: {student-team: team-3}
+      tolerations:
+        - {key: student-team, operator: Equal, value: team-3, effect: NoSchedule}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 123
+        fsGroup: 123
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: prepare-runner
+          image: ghcr.io/actions/actions-runner:2.338.2
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              if [ ! -x /runner/run.sh ]; then
+                cp -a /home/runner/. /runner/
+              fi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          volumeMounts:
+            - {name: data, mountPath: /runner}
+      containers:
+        - name: runner
+          image: ghcr.io/actions/actions-runner:2.338.2
+          workingDir: /runner
+          command: [/bin/bash, -ec]
+          args:
+            - |
+              python3 --version
+              if [ ! -f .runner ]; then
+                ./config.sh --unattended \
+                  --url https://github.com/FreeSpott/FreeSpot \
+                  --token "$RUNNER_TOKEN" \
+                  --name freespot-team-3 \
+                  --labels team-3 \
+                  --work _work --replace
+              fi
+              exec ./run.sh
+          env:
+            - name: RUNNER_TOKEN
+              valueFrom:
+                secretKeyRef: {name: freespot-runner-registration, key: token}
+            - {name: RUNNER_MANUALLY_TRAP_SIG, value: '1'}
+            - {name: ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT, value: '1'}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: '1', memory: 1Gi}
+          volumeMounts:
+            - {name: data, mountPath: /runner}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        storageClassName: local-path
+        resources:
+          requests: {storage: 3Gi}

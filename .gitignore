@@ -11,3 +11,11 @@ vite.config.*.timestamp-*
 logs/
 *.log
 .tmp-*
+
+# Cluster credentials and local release configuration
+*.kubeconfig
+.kube/
+.deploy/
+
+__pycache__/
+*.pyc

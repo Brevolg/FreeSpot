@@ -1,0 +1,101 @@
+{{- range $component := list "backend" "frontend" }}
+{{- $image := index $.Values $component }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: freespot-{{ $component }}
+  labels: {app.kubernetes.io/part-of: freespot}
+spec:
+  replicas: 1
+  # One API process owns schema initialization, seed and simulator.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: "freespot-{{ $component }}"}
+  template:
+    metadata:
+      labels: {app: "freespot-{{ $component }}", app.kubernetes.io/part-of: freespot}
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector: {{ $.Values.nodeSelector | toJson }}
+      tolerations: {{ $.Values.tolerations | toJson }}
+      imagePullSecrets: {{ $.Values.imagePullSecrets | toJson }}
+      {{- if eq $component "backend" }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        fsGroup: 10001
+        seccompProfile: {type: RuntimeDefault}
+      initContainers:
+        - name: wait-postgres
+          image: {{ $.Values.postgres.image }}
+          command: [sh, -ec, 'until pg_isready -h freespot-postgres -U freespot -d freespot; do sleep 2; done']
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {cpu: 100m, memory: 64Mi}
+      {{- end }}
+      containers:
+        - name: {{ $component }}
+          image: "{{ $image.image }}:{{ required (printf "%s.tag is required" $component) $image.tag }}"
+          imagePullPolicy: IfNotPresent
+          {{- if eq $component "backend" }}
+          ports: [{name: http, containerPort: 8000}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          env:
+            - {name: FREESPOT_ENVIRONMENT, value: kubernetes}
+            - {name: FREESPOT_ROOT_PATH, value: {{ $.Values.rootPath | quote }}}
+            - {name: FREESPOT_SIMULATOR_ENABLED, value: {{ $.Values.simulatorEnabled | quote }}}
+            - name: FREESPOT_DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.secretName }}, key: database-url}
+            - name: FREESPOT_API_KEY
+              valueFrom:
+                secretKeyRef: {name: {{ $.Values.secretName }}, key: api-key}
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+          startupProbe:
+            httpGet: {path: /ready, port: http}
+            periodSeconds: 3
+            failureThreshold: 40
+          readinessProbe:
+            httpGet: {path: /ready, port: http}
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+          {{- else }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 101
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+            seccompProfile: {type: RuntimeDefault}
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - {name: BACKEND_HOST, value: freespot-backend}
+          resources:
+            requests: {cpu: 25m, memory: 32Mi}
+            limits: {cpu: 200m, memory: 128Mi}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+          livenessProbe:
+            httpGet: {path: /, port: http}
+          {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: freespot-{{ $component }}
+  labels: {app.kubernetes.io/part-of: freespot}
+spec:
+  selector: {app: "freespot-{{ $component }}"}
+  ports:
+    - name: http
+      port: {{ if eq $component "backend" }}8000{{ else }}80{{ end }}
+      targetPort: http
+{{- end }}

@@ -1,0 +1,26 @@
+# Adapted from quiner1793/devops-templates (2_k8s_deploy).
+backend:
+  image: ghcr.io/freespott/freespot-backend
+  tag: "" # Required: immutable release tag or sha-<commit>.
+frontend:
+  image: ghcr.io/freespott/freespot-frontend
+  tag: ""
+imagePullSecrets: [] # Public GHCR images; add a secret only for private packages.
+secretName: freespot-secrets
+rootPath: /team-3
+simulatorEnabled: true
+nodeSelector:
+  student-team: team-3
+tolerations:
+  - key: student-team
+    operator: Equal
+    value: team-3
+    effect: NoSchedule
+postgres:
+  image: postgres:16-alpine
+  storageClass: local-path
+  storage: 5Gi
+ingress:
+  enabled: true
+  className: traefik
+  host: ""

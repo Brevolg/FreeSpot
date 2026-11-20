@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import { SPOTS, type Options, type Spot } from "./parking"
 
-const BASE = import.meta.env.VITE_API_URL ?? ""
+const BASE = import.meta.env.VITE_API_URL ?? import.meta.env.BASE_URL.replace(/\/$/, "")
 const POLL_MS = 5000
 
 interface ApiSpot {

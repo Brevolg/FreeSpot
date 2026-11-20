@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     service_name: str = "freespot-backend"
     environment: str = "local"
+    root_path: str = ""
     log_level: str = "INFO"
 
     database_url: str = "sqlite+aiosqlite:///./freespot.db"
