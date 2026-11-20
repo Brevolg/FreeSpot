@@ -9,7 +9,7 @@ ENV VITE_BASE_PATH=$VITE_BASE_PATH
 RUN pnpm typecheck && pnpm build
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-LABEL org.opencontainers.image.source="https://github.com/Brevolg/FreeSpot"
+LABEL org.opencontainers.image.source="https://github.com/FreeSpott/FreeSpot"
 ENV BACKEND_HOST=backend BACKEND_PORT=8000
 COPY nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /app/dist /usr/share/nginx/html

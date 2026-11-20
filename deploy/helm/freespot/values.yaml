@@ -1,9 +1,9 @@
 # Adapted from quiner1793/devops-templates (2_k8s_deploy).
 backend:
-  image: ghcr.io/brevolg/freespot-backend
+  image: ghcr.io/freespott/freespot-backend
   tag: "" # Required: immutable release tag or sha-<commit>.
 frontend:
-  image: ghcr.io/brevolg/freespot-frontend
+  image: ghcr.io/freespott/freespot-frontend
   tag: ""
 imagePullSecrets: [] # Public GHCR images; add a secret only for private packages.
 secretName: freespot-secrets

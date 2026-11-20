@@ -24,7 +24,7 @@ export KUBECONFIG="$HOME/Downloads/team-3.kubeconfig"
 
 Опубликованные CI образы публичны, авторизация для деплоя не нужна. Для приватных пакетов выполните `gh auth refresh -h github.com -s read:packages` и `python3 deploy/k8s/registry-secret.py`, затем передайте деплою `--set imagePullSecrets[0].name=freespot-registry`.
 
-`registry-secret.py` читает токен из keychain через `gh`, создаёт `freespot-registry` и выполняет Docker login через stdin. Токен не выводится и не попадает в аргументы процессов. Аккаунт должен иметь доступ к пакетам `ghcr.io/brevolg/freespot-backend` и `ghcr.io/brevolg/freespot-frontend` (для ручной публикации — также право записи).
+`registry-secret.py` читает токен из keychain через `gh`, создаёт `freespot-registry` и выполняет Docker login через stdin. Токен не выводится и не попадает в аргументы процессов. Аккаунт должен иметь доступ к пакетам `ghcr.io/freespott/freespot-backend` и `ghcr.io/freespott/freespot-frontend` (для ручной публикации — также право записи).
 
 После публикации образов CI:
 
@@ -38,10 +38,10 @@ deploy/k8s/deploy.sh
 ```bash
 export IMAGE_TAG=sha-$(git rev-parse HEAD)
 docker buildx build --platform linux/amd64 --push \
-  -t "ghcr.io/brevolg/freespot-backend:$IMAGE_TAG" backend
+  -t "ghcr.io/freespott/freespot-backend:$IMAGE_TAG" backend
 docker buildx build --platform linux/amd64 --push \
   --build-arg VITE_BASE_PATH=/team-3/ \
-  -t "ghcr.io/brevolg/freespot-frontend:$IMAGE_TAG" frontend
+  -t "ghcr.io/freespott/freespot-frontend:$IMAGE_TAG" frontend
 deploy/k8s/deploy.sh
 ```
 
@@ -82,16 +82,23 @@ curl -f http://localhost:18080/ready
 Кнопка ручного запуска появится после добавления workflow в основную ветку. Запуск доступен участникам с правом записи. Запуск из терминала:
 
 ```bash
-gh workflow run deploy.yml --repo Brevolg/FreeSpot --ref master
+gh workflow run deploy.yml --repo FreeSpott/FreeSpot --ref master
 ```
 
 Перед первым запуском:
 
-- Владелец личного репозитория регистрирует Linux x64 self-hosted runner с меткой `team-3` через **Settings → Actions → Runners → New self-hosted runner**. Runner должен работать в сети с доступом к `10.93.26.212:6443` и к адресу Ingress по HTTP. Ему нужны Python 3, bash, curl, tar и доступ к GitHub; kubectl и Helm устанавливает workflow. Не запускайте PR из непроверенных веток на этом runner.
+- Администратор репозитория регистрирует runner `freespot-team-3` в Kubernetes. Манифест `deploy/runner/runner.yaml` запускает официальный GitHub runner без root, без service-account token и без Docker socket; состояние регистрации хранится на отдельном PVC 3 GiB. Он закреплён за узлом team-3 и имеет метки `self-hosted, linux, x64, team-3`. Образы приложения собираются на GitHub hosted runners. Для первоначальной регистрации из сети кластера:
+
+```bash
+export KUBECONFIG="$HOME/Downloads/team-3.kubeconfig"
+python3 deploy/runner/bootstrap.py
+```
+
+Скрипт получает часовой registration token через GitHub API и передаёт его в Kubernetes Secret через stdin. Токен не выводится и не записывается в Git. После первой регистрации runner использует сохранённые на PVC credentials. При потере PVC повторите bootstrap перед запуском нового runner. Не запускайте PR из непроверенных веток на этом runner.
 - Collaborator может добавить repository secret `KUBECONFIG`: полное содержимое `team-3.kubeconfig`, без base64-кодирования, через **Settings → Secrets and variables → Actions → New repository secret**. Либо с Mac:
 
 ```bash
-gh secret set KUBECONFIG --repo Brevolg/FreeSpot < "$HOME/Downloads/team-3.kubeconfig"
+gh secret set KUBECONFIG --repo FreeSpott/FreeSpot < "$HOME/Downloads/team-3.kubeconfig"
 ```
 
 Переменная `DEPLOY_ENABLED` не используется. Деплой на push, merge или по расписанию не запускается. Обновления одного namespace сериализуются, Helm откатывает неудачный релиз (`--atomic` в Helm 3, `--rollback-on-failure` в Helm 4). Проверка Ingress выполняется после Helm; при её ошибке workflow завершится неуспешно, установленный релиз останется для диагностики.
